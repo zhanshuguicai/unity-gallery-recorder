@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>GalleryRecorder.KureaStruggle</AssemblyName>
+    <RootNamespace>GalleryRecorder.Adapters.KureaStruggle</RootNamespace>
+    <Version>0.1.0</Version>
+    <GameDir>$(KureaDir)</GameDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GalleryRecorder.Core\GalleryRecorder.Core.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="$(GameDir)\BepInEx\core\BepInEx.dll" Private="false" />
+    <Reference Include="$(GameDir)\*_Data\Managed\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="$(GameDir)\*_Data\Managed\Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="$(GameDir)\*_Data\Managed\UnityEngine.dll" Private="false" />
+    <Reference Include="$(GameDir)\*_Data\Managed\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(GameDir)\*_Data\Managed\UnityEngine.UI.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="DeployAdapter" AfterTargets="Build" Condition="'$(Deploy)' == 'true' And Exists('$(GameDir)\BepInEx')">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)\BepInEx\plugins\GalleryRecorder" />
+  </Target>
+</Project>

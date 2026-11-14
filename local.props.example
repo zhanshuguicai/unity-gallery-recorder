@@ -1,0 +1,14 @@
+<Project>
+  <!-- 复制为 local.props 并改成你自己的游戏路径。local.props 不会被提交。 -->
+  <PropertyGroup>
+    <!-- 各扩展包对应的游戏根目录（exe 所在目录）。只编译某一个扩展包时，其他的可以不填 -->
+    <YorutinaDir>D:\Games\Yorutina</YorutinaDir>
+    <KureaDir>D:\Games\Kurea Struggle</KureaDir>
+
+    <!-- 编译核心时引用哪个游戏的 Unity / BepInEx DLL。留空 = 用 YorutinaDir -->
+    <RefGameDir></RefGameDir>
+
+    <!-- true = 编译后自动复制到对应游戏的 BepInEx\plugins -->
+    <Deploy>false</Deploy>
+  </PropertyGroup>
+</Project>

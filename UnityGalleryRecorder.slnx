@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/adapters/" />
+  <Folder Name="/adapters/KureaStruggle/">
+    <Project Path="adapters/KureaStruggle/GalleryRecorder.KureaStruggle.csproj" />
+  </Folder>
+  <Folder Name="/adapters/Yorutina/">
+    <Project Path="adapters/Yorutina/GalleryRecorder.Yorutina.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/GalleryRecorder.Core/GalleryRecorder.Core.csproj" />
+  </Folder>
+</Solution>

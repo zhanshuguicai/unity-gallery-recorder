@@ -1,0 +1,23 @@
+<Project>
+  <!-- 本机路径写在 local.props（不提交），格式见 local.props.example -->
+  <Import Project="$(MSBuildThisFileDirectory)local.props" Condition="Exists('$(MSBuildThisFileDirectory)local.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Deterministic>true</Deterministic>
+    <!-- 核心只用 Unity 和 BepInEx 的通用 API，任选一个已装 BepInEx 5 的 Unity Mono 游戏作为引用来源 -->
+    <RefGameDir Condition="'$(RefGameDir)' == ''">$(YorutinaDir)</RefGameDir>
+    <BepInExCore>$(RefGameDir)\BepInEx\core</BepInExCore>
+    <Deploy Condition="'$(Deploy)' == ''">false</Deploy>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

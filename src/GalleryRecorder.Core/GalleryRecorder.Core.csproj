@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>GalleryRecorder.Core</AssemblyName>
+    <RootNamespace>GalleryRecorder</RootNamespace>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(BepInExCore)\BepInEx.dll" Private="false" />
+    <Reference Include="$(RefGameDir)\*_Data\Managed\UnityEngine.dll" Private="false" />
+    <Reference Include="$(RefGameDir)\*_Data\Managed\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(RefGameDir)\*_Data\Managed\UnityEngine.AudioModule.dll" Private="false" />
+    <Reference Include="$(RefGameDir)\*_Data\Managed\UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="$(RefGameDir)\*_Data\Managed\UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="$(RefGameDir)\*_Data\Managed\UnityEngine.ScreenCaptureModule.dll" Private="false" />
+    <Reference Include="$(RefGameDir)\*_Data\Managed\UnityEngine.TextRenderingModule.dll" Private="false" />
+    <!-- 只在运行时按需使用；游戏没有 Input System 时自动改用旧版 Input -->
+    <Reference Include="$(RefGameDir)\*_Data\Managed\Unity.InputSystem.dll" Private="false" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+
+  <Target Name="DeployCore" AfterTargets="Build" Condition="'$(Deploy)' == 'true'">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(YorutinaDir)\BepInEx\plugins\GalleryRecorder" Condition="'$(YorutinaDir)' != '' And Exists('$(YorutinaDir)\BepInEx')" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(KureaDir)\BepInEx\plugins\GalleryRecorder" Condition="'$(KureaDir)' != '' And Exists('$(KureaDir)\BepInEx')" />
+  </Target>
+</Project>
