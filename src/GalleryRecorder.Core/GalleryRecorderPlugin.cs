@@ -337,7 +337,7 @@ namespace GalleryRecorder
                 Log.LogInfo(status);
             }
             if (Hotkeys.Pressed(keyCompress.Value) && phase == Phase.Idle)
-                StartCompress(ListRecordings());
+                StartCompress();
         }
 
         // ================= 会话 / 队列 =================
@@ -411,7 +411,7 @@ namespace GalleryRecorder
             }
             Log.LogInfo($"全部 {queue.Count} 段已处理完。");
             try { adapter.OnSessionEnd(); } catch (Exception ex) { Log.LogError(ex); }
-            if (cfgCompress.Value) StartCompress(ListRecordings());
+            if (cfgCompress.Value) StartCompress();
             else { phase = Phase.Idle; status = "全部录完：" + outDir; }
         }
 
@@ -485,22 +485,24 @@ namespace GalleryRecorder
         }
 
         // ================= 压缩 =================
-        private List<string> ListRecordings() => Directory.Exists(outDir)
-            ? Directory.GetFiles(outDir, "*.mp4").Where(f => !f.Contains(".tmp.")).OrderBy(f => f).ToList()
+        private static List<string> ListRecordings(string dir) => Directory.Exists(dir)
+            ? Directory.GetFiles(dir, "*.mp4").Where(f => !f.Contains(".tmp.")).OrderBy(f => f).ToList()
             : new List<string>();
 
-        private void StartCompress(List<string> files)
+        private void StartCompress()
         {
-            if (files.Count == 0) { phase = Phase.Idle; status = "没有可压缩的录像"; return; }
-            phase = Phase.Compressing;
             var pending = finalizing.ToArray();
+            if (pending.Length == 0 && ListRecordings(outDir).Count == 0) { phase = Phase.Idle; status = "没有可压缩的录像"; return; }
+            phase = Phase.Compressing;
             string ff = ffmpegPath, args = FixCompressArgs(cfgCompressArgs.Value), dir = outDir;
             bool del = cfgDeleteOriginal.Value, zip = cfgZip.Value;
             compressStatus = "等待录像合成完成…";
-            Log.LogInfo($"开始压缩 {files.Count} 个文件…");
             compressTask = Task.Run(() =>
             {
                 try { Task.WaitAll(pending); } catch { }
+                // 必须在最后一段合成完之后再列文件，否则最后一段会漏压
+                var files = ListRecordings(dir);
+                Log.LogInfo($"开始压缩 {files.Count} 个文件…");
                 string cdir = Path.Combine(dir, "Compressed");
                 Directory.CreateDirectory(cdir);
                 int ok = 0; long before = 0, after = 0;
