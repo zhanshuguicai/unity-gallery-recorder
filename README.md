@@ -51,6 +51,8 @@ RPG Maker MV（NW.js）游戏用 [rpgmaker-mv/](rpgmaker-mv) 下的 js 版，流
 
 只用 Game Bar 模式时可以不装 ffmpeg，但最后的压缩需要它。
 
+> **把游戏放在固态硬盘上录。** 录制时游戏要边读素材边播，插件同时在写录像、后台转码，这些都挤在游戏所在的那块盘上。游戏放在 USB 移动机械硬盘时，实测掉帧很严重（Boss 战只剩 30 fps、长剧情 15 fps、时不时卡住几秒）；把整个游戏复制到 NVMe 固态后明显好转。游戏原本在机械硬盘上的话，先把整个游戏目录复制到固态再装插件、录制；输出目录（`OutputDir` / `outputDir`）也放在固态上。
+
 ## 使用
 
 | 热键 | 作用 |
@@ -70,6 +72,7 @@ RPG Maker MV（NW.js）游戏用 [rpgmaker-mv/](rpgmaker-mv) 下的 js 版，流
 - **压缩全部失败**：MediaFoundation 编码器（`*_mf`）只接受 nv12 输入，压缩参数里要有 `-pix_fmt nv12`（插件会自动补上）。
 - **没有硬件编码器**：把 `VideoEncoderArgs` 改成 `-c:v libopenh264 -b:v 20M`（需要 ffmpeg 带 openh264），或 `-c:v libx264 -crf 18`。
 - **放到别的虚拟桌面录**：内置录制模式可以；Game Bar 模式不行。
+- **掉帧 / 一卡一卡**：先看游戏和输出目录是不是在机械硬盘（尤其 USB 移动硬盘）上，是的话整个复制到固态再录，见上面“安装”最后一条。
 
 ## 从源码编译
 

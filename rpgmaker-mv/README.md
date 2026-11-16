@@ -24,6 +24,8 @@ powershell -ExecutionPolicy Bypass -File rpgmaker-mv\tools\install.ps1 -GameDir 
 2. 在根目录 `package.json` 加 `chromium-args`，关掉 Chromium 对后台 / 被遮挡窗口的降帧（备份为 `package.json.gr-backup`）。不加的话游戏放到别的虚拟桌面会停住。
 3. 把 ffmpeg 复制到 `<游戏目录>\GalleryRecorder\ffmpeg\`（需要带 `h264_mf` / `hevc_mf`；可以用 `tools\get-ffmpeg.ps1` 下载）。
 
+**先把游戏放到固态硬盘上。** MV 游戏的图片和声音是播到哪读到哪，录像也在同一块盘上写。SAO2 第一次放在 USB 移动机械硬盘上录，Boss 战只剩 30 fps、长剧情 15 fps，还会卡住几秒；整个目录复制到 NVMe 固态后明显好转（0.1.1 起录像也改成了后台写盘，不再卡游戏主线程）。
+
 卸载：同一个脚本加 `-Uninstall`（去掉插件登记和 js；`package.json` 改动用备份还原）。
 
 ## 使用
