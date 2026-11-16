@@ -8,3 +8,6 @@ tools/ffmpeg/
 # 本机交接记录，含本地路径，不公开
 HANDOFF.md
 docs/worklog/
+
+# 本机测试用游戏（不公开）
+test game/

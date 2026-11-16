@@ -20,7 +20,7 @@
 
 var GalleryRecorder = (function () {
     'use strict';
-    var VERSION = '0.1.0';
+    var VERSION = '0.1.1';
     var fs = require('fs');
     var path = require('path');
     var cp = require('child_process');
@@ -202,7 +202,12 @@ var GalleryRecorder = (function () {
                 var blob = e.data;
                 self.bytes += blob.size;
                 self.chain = self.chain.then(function () { return blob.arrayBuffer(); })
-                    .then(function (ab) { fs.appendFileSync(raw, Buffer.from(ab)); })
+                    // 异步写，不阻塞游戏主线程（同步写在机械硬盘上会让游戏卡住几百毫秒到几秒）
+                    .then(function (ab) {
+                        return new Promise(function (res, rej) {
+                            fs.appendFile(raw, Buffer.from(ab), function (err) { if (err) rej(err); else res(); });
+                        });
+                    })
                     .catch(function (err) { Log.error('写入录像失败：' + err.message); });
             };
             this.mr.onerror = function (e) { Log.error('MediaRecorder 出错：' + (e.error ? e.error.message : e)); };
