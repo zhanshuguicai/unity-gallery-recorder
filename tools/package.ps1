@@ -27,5 +27,21 @@ try {
         Remove-Item -Recurse -Force $stage
         Write-Host "  $zip"
     }
+
+    # RPG Maker MV：每个扩展包一个 zip，内含 core、该扩展包和安装脚本（目录结构同仓库）
+    $mv = Join-Path $root "rpgmaker-mv"
+    Get-ChildItem (Join-Path $mv "adapters") -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $stage = Join-Path $dist ("_stage_mv_" + $_.Name)
+        $dst = Join-Path $stage "rpgmaker-mv"
+        New-Item -ItemType Directory -Force (Join-Path $dst "adapters") | Out-Null
+        Copy-Item -Recurse (Join-Path $mv "core") $dst
+        Copy-Item -Recurse (Join-Path $mv "tools") $dst
+        Copy-Item -Recurse $_.FullName (Join-Path $dst "adapters")
+        Copy-Item (Join-Path $mv "README.md") $dst
+        $zip = Join-Path $dist ("GalleryRecorder-MV-" + $_.Name + ".zip")
+        Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -Force
+        Remove-Item -Recurse -Force $stage
+        Write-Host "  $zip"
+    }
 }
 finally { Pop-Location }

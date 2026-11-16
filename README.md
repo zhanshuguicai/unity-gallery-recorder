@@ -1,6 +1,6 @@
 # Unity Gallery Recorder
 
-给 Unity（Mono）游戏用的 BepInEx 5 插件框架：**自动依次播放游戏画廊 / 回想里的每一段，每段单独录成一个视频，全部录完后统一压缩。**
+给 Unity（Mono）游戏用的 BepInEx 5 插件框架（另有 [RPG Maker MV 版](rpgmaker-mv)）：**自动依次播放游戏画廊 / 回想里的每一段，每段单独录成一个视频，全部录完后统一压缩。**
 
 框架分两层：
 
@@ -16,7 +16,13 @@
 | [Yorutina](adapters/Yorutina) | Yorutina | 标题画面按 F8；录画廊里全部条目 |
 | [KureaStruggle](adapters/KureaStruggle) | Kurea Struggle | 进入回想房后按 F8；有选项的回想会把每个分支都录一遍 |
 
-想支持新游戏：看 [写一个扩展包](docs/writing-an-adapter.md)。欢迎提交 PR。
+RPG Maker MV（NW.js）游戏用 [rpgmaker-mv/](rpgmaker-mv) 下的 js 版，流程相同：
+
+| 扩展包 | 游戏 | 说明 |
+| --- | --- | --- |
+| [SAO2](rpgmaker-mv/adapters/SAO2) | SAO~气息遮断魔法陷阱 Ⅱ | 读档进入地图后按 F8；录每段回想的“仅限事件” |
+
+想支持新游戏：看 [写一个扩展包](docs/writing-an-adapter.md)（Unity），或 [RPG Maker MV 版说明](rpgmaker-mv/README.md#写一个扩展包)。欢迎提交 PR。
 
 ## 功能
 
@@ -81,8 +87,9 @@ dotnet build -c Release
 ## 目录
 
 ```
-src/GalleryRecorder.Core/   核心插件
+src/GalleryRecorder.Core/   核心插件（Unity / BepInEx）
 adapters/<游戏>/            各游戏扩展包（每个都是独立的 BepInEx 插件）
+rpgmaker-mv/                RPG Maker MV 版：core/、adapters/<游戏>/、tools/install.ps1
 docs/                       文档
 tools/                      ffmpeg 下载、打包脚本
 ```
