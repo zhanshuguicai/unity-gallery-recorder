@@ -10,7 +10,7 @@
 
 - 画面：`canvas.captureStream()` 取游戏画布，声音：把所有连到扬声器的 WebAudio 节点再连一份到录音节点。都在游戏内部完成，只录游戏本身，不录浮层，窗口被挡住或放在别的虚拟桌面也能录。
 - 编码：浏览器的 MediaRecorder 先录成 `.rec.webm`，每段录完后台用 ffmpeg 转成 mp4（默认 `h264_mf` 显卡编码）。
-- 全部录完：等所有转码结束，再用 `hevc_mf` 压缩到 `Compressed\`。
+- 全部录完：等所有转码结束，再用 `hevc_mf` 压缩到 `Compressed\`（保留原来的可变帧率，不会把 60 fps 的画面降成 30），然后无损拼出整合版到 `Merged\`。
 
 ## 安装
 
@@ -36,7 +36,8 @@ powershell -ExecutionPolicy Bypass -File rpgmaker-mv\tools\install.ps1 -GameDir 
 | F7 | 放弃当前这段（不保存，记为跳过），继续下一段 |
 | F6 | 清空进度（空闲时） |
 | F9 | 显示 / 隐藏左上角状态（DOM 浮层，不会录进视频） |
-| F10 | 立刻压缩输出目录里已有的录像（空闲时） |
+| F10 | 立刻压缩输出目录里已有的录像（空闲时；完成后接着做整合版） |
+| F11 | 立刻把已有的录像拼成整合版（空闲时） |
 
 - 输出：`<游戏目录>\GalleryRecordings\`，进度在 `progress.txt`，中途退出后再按 F8 从没录的那段继续。
 - 设置：`<游戏目录>\GalleryRecorder\config.json`（第一次启动生成），日志：同目录 `log.txt`。
@@ -58,6 +59,7 @@ powershell -ExecutionPolicy Bypass -File rpgmaker-mv\tools\install.ps1 -GameDir 
 | `blockSaves` | true | 见上面的存档保护 |
 | `compress` / `compressArgs` | true / hevc_mf quality 60 | 全部录完后的压缩 |
 | `deleteOriginalAfterCompress` | false | 压缩成功后删掉原始 mp4 |
+| `merge` / `mergeName` | true / 全部回想 | 最后把分段无损拼成整合版（原版、压缩版各一个，带章节），放在 `Merged\` |
 | `hotkeys` | F8/F7/F6/F9/F10 | `KeyboardEvent.key` 的名字 |
 
 ## 写一个扩展包

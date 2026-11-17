@@ -20,7 +20,7 @@
 
 var GalleryRecorder = (function () {
     'use strict';
-    var VERSION = '0.1.3';
+    var VERSION = '0.2.0';
     var fs = require('fs');
     var path = require('path');
     var cp = require('child_process');
@@ -46,8 +46,10 @@ var GalleryRecorder = (function () {
         compress: true,
         compressArgs: '-c:v hevc_mf -hw_encoding 1 -rate_control quality -quality 60 -c:a aac -b:a 160k',
         deleteOriginalAfterCompress: false,
+        merge: true,                   // 最后把所有分段无损拼成整合版（原版、压缩版各一个，带章节）
+        mergeName: '全部回想',          // 整合版文件名（放在输出目录\Merged\）
         showOverlay: true,
-        hotkeys: { start: 'F8', skip: 'F7', reset: 'F6', overlay: 'F9', compress: 'F10' }
+        hotkeys: { start: 'F8', skip: 'F7', reset: 'F6', overlay: 'F9', compress: 'F10', merge: 'F11' }
     };
 
     function loadConfig() {
@@ -391,6 +393,7 @@ var GalleryRecorder = (function () {
         try { if (adapter && adapter.onSessionEnd) adapter.onSessionEnd(); } catch (e) { Log.error(e.stack); }
         if (msg) { status = msg; Log.info(msg); setPhase('Idle'); return; }
         if (cfg.compress) startCompress();
+        else if (cfg.merge) startMerge();
         else { status = '全部录完：' + outDir; setPhase('Idle'); }
     }
 
@@ -406,6 +409,8 @@ var GalleryRecorder = (function () {
         compressStatus = '等待转码完成…';
         var dir = outDir, cdir = path.join(dir, 'Compressed');
         var args = splitArgs(fixMfArgs(cfg.compressArgs));
+        // 浏览器录的是可变帧率；不加这个 ffmpeg 会按 30 fps 重采样，60 fps 的画面会丢一半帧
+        if (cfg.compressArgs.indexOf('-fps_mode') < 0 && cfg.compressArgs.indexOf('-r ') < 0) args = ['-fps_mode', 'passthrough'].concat(args);
         // 先等所有转码结束再列文件，否则最后一段会漏掉。
         Recorder.finalizeChain.then(function () {
             var files = listRecordings(dir);
@@ -417,7 +422,7 @@ var GalleryRecorder = (function () {
                     compressStatus = '压缩完成 ' + ok + '/' + files.length + '，' + (before / 1048576).toFixed(0) + ' MB → ' + (after / 1048576).toFixed(0) + ' MB，目录：' + cdir;
                     Log.info(compressStatus);
                     status = compressStatus;
-                    setPhase('Idle');
+                    if (cfg.merge) startMerge(); else setPhase('Idle');
                     return;
                 }
                 var src = files[i++], dst = path.join(cdir, path.basename(src)), tmp = dst + '.part.mp4';
@@ -435,6 +440,77 @@ var GalleryRecorder = (function () {
                     });
             }
             next();
+        });
+    }
+
+    // ---------------------------------------------------------------- 整合版
+    // 把输出目录里的分段（和 Compressed\ 里的压缩版）按文件名顺序无损拼成一个 mp4，每段一个章节。
+    function probeDuration(file) {
+        return new Promise(function (resolve) {
+            var err = '', p;
+            try { p = cp.spawn(ffmpegPath, ['-hide_banner', '-i', file], { windowsHide: true }); }
+            catch (e) { resolve(0); return; }
+            p.stderr.on('data', function (d) { err += d.toString(); });
+            p.on('error', function () { });
+            p.on('close', function () {
+                var m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(err);
+                resolve(m ? (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]) : 0);
+            });
+        });
+    }
+    function metaEscape(s) { return String(s).replace(/([=;#\\\n])/g, '\\$1'); }
+    function mergeFiles(files, out, extraArgs) {
+        if (!files.length) return Promise.resolve(false);
+        var listFile = out + '.list.txt', metaFile = out + '.chapters.txt', tmp = out + '.part.mp4';
+        var errLog = out + '.ffmpeg.log';
+        var durs = [], i = 0;
+        function probeNext() {
+            if (i >= files.length) return Promise.resolve();
+            var f = files[i++];
+            compressStatus = '整合：读取时长 ' + i + '/' + files.length;
+            return probeDuration(f).then(function (d) { durs.push(d); return probeNext(); });
+        }
+        return probeNext().then(function () {
+            var list = files.map(function (f) { return "file '" + f.replace(/\\/g, '/').replace(/'/g, "'\\''") + "'"; }).join('\n') + '\n';
+            var meta = ';FFMETADATA1\n', t = 0;
+            files.forEach(function (f, k) {
+                var start = Math.round(t * 1000); t += durs[k];
+                meta += '[CHAPTER]\nTIMEBASE=1/1000\nSTART=' + start + '\nEND=' + Math.round(t * 1000) +
+                    '\ntitle=' + metaEscape(path.basename(f, '.mp4')) + '\n';
+            });
+            rawWrite(listFile, list); rawWrite(metaFile, meta);
+            compressStatus = '整合中：' + path.basename(out) + '（' + files.length + ' 段，' + (t / 3600).toFixed(1) + ' 小时）';
+            Log.info(compressStatus);
+            return runFfmpeg(['-hide_banner', '-loglevel', 'warning', '-y', '-f', 'concat', '-safe', '0', '-i', listFile,
+                '-i', metaFile, '-map', '0', '-map_metadata', '1', '-map_chapters', '1', '-c', 'copy']
+                .concat(extraArgs || [], ['-movflags', '+faststart', tmp]), errLog);
+        }).then(function (code) {
+            tryDelete(listFile); tryDelete(metaFile);
+            if (code === 0 && fs.existsSync(tmp)) {
+                tryDelete(out); fs.renameSync(tmp, out); tryDelete(errLog);
+                Log.info('整合完成：' + out + '，' + (fs.statSync(out).size / 1073741824).toFixed(2) + ' GB');
+                return true;
+            }
+            tryDelete(tmp); Log.error('整合失败 (exit ' + code + ')：' + out + '，见 ' + errLog);
+            return false;
+        });
+    }
+    function startMerge() {
+        if (!outDir) { outDir = cfg.outputDir ? cfg.outputDir : path.join(gameRoot, 'GalleryRecordings'); }
+        setPhase('Compressing');
+        compressStatus = '整合：等待转码完成…';
+        var dir = outDir, mdir = path.join(dir, 'Merged'), cdir = path.join(dir, 'Compressed');
+        var name = cfg.mergeName || '全部回想';
+        Recorder.finalizeChain.then(function () {
+            fs.mkdirSync(mdir, { recursive: true });
+            var raw = listRecordings(dir), comp = listRecordings(cdir);
+            Log.info('开始整合：原版 ' + raw.length + ' 段，压缩版 ' + comp.length + ' 段');
+            return mergeFiles(raw, path.join(mdir, name + '.mp4'))
+                .then(function () { return mergeFiles(comp, path.join(mdir, name + '_压缩.mp4'), ['-tag:v', 'hvc1']); });
+        }).catch(function (e) { Log.error('整合出错：' + (e && e.stack)); }).then(function () {
+            status = '整合结束，目录：' + mdir;
+            Log.info(status);
+            setPhase('Idle');
         });
     }
 
@@ -504,6 +580,8 @@ var GalleryRecorder = (function () {
             overlayVisible = !overlayVisible;
         } else if (k === h.compress) {
             if (phase === 'Idle') startCompress();
+        } else if (k === h.merge) {
+            if (phase === 'Idle') startMerge();
         } else return;
         e.preventDefault();
     }

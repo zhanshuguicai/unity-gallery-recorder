@@ -411,5 +411,70 @@ namespace GalleryRecorder
                 return p.ExitCode;
             }
         }
+
+        /// <summary>读媒体文件时长（秒），读不到返回 0。</summary>
+        public static double Duration(string exe, string file)
+        {
+            var sb = new StringBuilder();
+            using (var p = Create(exe, $"-hide_banner -i \"{file}\"", false))
+            {
+                p.ErrorDataReceived += (_, e) => { if (e.Data != null) lock (sb) sb.AppendLine(e.Data); };
+                p.Start();
+                p.BeginErrorReadLine();
+                p.WaitForExit();
+                p.WaitForExit();
+            }
+            var m = System.Text.RegularExpressions.Regex.Match(sb.ToString(), @"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)");
+            if (!m.Success) return 0;
+            return int.Parse(m.Groups[1].Value) * 3600 + int.Parse(m.Groups[2].Value) * 60
+                + double.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// 把 files 按顺序无损拼接成 output（concat，-c copy），每段一个章节（标题 = 文件名）。
+        /// 所有分段必须是同一套编码参数（同一次录制 / 同一次压缩出来的就是）。
+        /// </summary>
+        public static bool Merge(string exe, IList<string> files, string output, string extraArgs, Action<string> progress, ManualLogSource log)
+        {
+            if (files.Count == 0) return false;
+            string list = output + ".list.txt", meta = output + ".chapters.txt", tmp = output + ".part.mp4", logPath = output + ".ffmpeg.log";
+            var lsb = new StringBuilder();
+            var msb = new StringBuilder(";FFMETADATA1\n");
+            double t = 0;
+            for (int i = 0; i < files.Count; i++)
+            {
+                progress?.Invoke($"整合：读取时长 {i + 1}/{files.Count}");
+                double d = Duration(exe, files[i]);
+                lsb.Append("file '").Append(files[i].Replace('\\', '/').Replace("'", "'\\''")).Append("'\n");
+                long start = (long)Math.Round(t * 1000); t += d;
+                msb.Append("[CHAPTER]\nTIMEBASE=1/1000\nSTART=").Append(start).Append("\nEND=").Append((long)Math.Round(t * 1000))
+                   .Append("\ntitle=").Append(MetaEscape(Path.GetFileNameWithoutExtension(files[i]))).Append('\n');
+            }
+            File.WriteAllText(list, lsb.ToString(), new UTF8Encoding(false));
+            File.WriteAllText(meta, msb.ToString(), new UTF8Encoding(false));
+            string msg = $"整合中：{Path.GetFileName(output)}（{files.Count} 段，{t / 3600:0.0} 小时）";
+            progress?.Invoke(msg);
+            log.LogInfo(msg);
+            int code = Run(exe, $"-hide_banner -loglevel warning -y -f concat -safe 0 -i \"{list}\" -i \"{meta}\" -map 0 -map_metadata 1 -map_chapters 1 -c copy {extraArgs} -movflags +faststart \"{tmp}\"", logPath);
+            Recorder.TryDelete(list); Recorder.TryDelete(meta);
+            if (code == 0 && File.Exists(tmp))
+            {
+                Recorder.TryDelete(output);
+                File.Move(tmp, output);
+                Recorder.TryDelete(logPath);
+                log.LogInfo($"整合完成：{output}，{new FileInfo(output).Length / 1073741824.0:0.00} GB");
+                return true;
+            }
+            Recorder.TryDelete(tmp);
+            log.LogError($"整合失败 (exit {code})：{output}，见 {logPath}");
+            return false;
+        }
+
+        private static string MetaEscape(string s)
+        {
+            var sb = new StringBuilder();
+            foreach (char c in s) { if (c == '=' || c == ';' || c == '#' || c == '\\' || c == '\n') sb.Append('\\'); sb.Append(c); }
+            return sb.ToString();
+        }
     }
 }

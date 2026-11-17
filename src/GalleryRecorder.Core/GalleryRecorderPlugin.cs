@@ -1,4 +1,4 @@
-// Unity Gallery Recorder 核心（BepInEx 5 插件）
+﻿// Unity Gallery Recorder 核心（BepInEx 5 插件）
 // 按 F8：依次自动播放扩展包列出的每一段回想，每段单独录成一个 mp4，录完自动开始下一段；
 // 全部录完后把视频再压缩一遍（HEVC），可选打包 zip。进度会记住，中途退出后再按 F8 从没录的开始。
 using System;
@@ -21,7 +21,7 @@ namespace GalleryRecorder
     {
         public const string GUID = "unitygalleryrecorder.core";
         public const string NAME = "Unity Gallery Recorder";
-        public const string VERSION = "0.1.0";
+        public const string VERSION = "0.2.0";
 
         internal static ManualLogSource Log;
         private static GalleryRecorderPlugin instance;
@@ -57,9 +57,11 @@ namespace GalleryRecorder
         private ConfigEntry<bool> cfgCompress;
         private ConfigEntry<string> cfgCompressArgs;
         private ConfigEntry<bool> cfgDeleteOriginal;
+        private ConfigEntry<bool> cfgMerge;
+        private ConfigEntry<string> cfgMergeName;
         private ConfigEntry<bool> cfgZip;
         private ConfigEntry<bool> cfgOverlay;
-        private ConfigEntry<string> keyStart, keySkip, keyReset, keyOverlay, keyCompress;
+        private ConfigEntry<string> keyStart, keySkip, keyReset, keyOverlay, keyCompress, keyMerge;
 
         // ---- 运行状态 ----
         private enum Phase { Idle, Launching, Playing, Finishing, Waiting, Compressing }
@@ -113,6 +115,8 @@ namespace GalleryRecorder
             cfgCompressArgs = Config.Bind("Compress", "CompressArgs", "-pix_fmt nv12 -c:v hevc_mf -hw_encoding 1 -rate_control quality -quality 60 -tag:v hvc1 -c:a aac -b:a 160k",
                 "压缩用的 ffmpeg 参数（输出到 Compressed 子目录）。quality 越小文件越小");
             cfgDeleteOriginal = Config.Bind("Compress", "DeleteOriginalAfterCompress", false, "压缩成功后删除原始录像");
+            cfgMerge = Config.Bind("Merge", "MergeWhenFinished", true, "最后把所有分段无损拼成整合版（原版、压缩版各一个，带章节），放在输出目录\\Merged");
+            cfgMergeName = Config.Bind("Merge", "MergeFileName", "全部回想", "整合版文件名（不含 .mp4）；压缩版加 _压缩");
             cfgZip = Config.Bind("Compress", "PackZip", false, "压缩后再把 Compressed 目录打包成一个 zip（只归档，不再压缩）");
             cfgOverlay = Config.Bind("UI", "ShowOverlay", true, "不录制时在左上角显示状态（录制中自动隐藏，不会录进视频）");
             keyStart = Config.Bind("Hotkeys", "StartStop", "F8", "开始；运行中再按 = 录完当前这段后停止");
@@ -120,6 +124,7 @@ namespace GalleryRecorder
             keyReset = Config.Bind("Hotkeys", "ResetProgress", "F6", "清空进度记录（空闲时）");
             keyOverlay = Config.Bind("Hotkeys", "ToggleOverlay", "F9", "显示/隐藏状态");
             keyCompress = Config.Bind("Hotkeys", "CompressNow", "F10", "立刻压缩输出目录里已有的录像（空闲时）");
+            keyMerge = Config.Bind("Hotkeys", "MergeNow", "F11", "立刻把输出目录里已有的录像拼成整合版（空闲时）");
 
             string pluginDir = Path.GetDirectoryName(Info.Location);
             ffmpegPath = Path.Combine(pluginDir, "ffmpeg", "ffmpeg.exe");
@@ -338,6 +343,8 @@ namespace GalleryRecorder
             }
             if (Hotkeys.Pressed(keyCompress.Value) && phase == Phase.Idle)
                 StartCompress();
+            else if (Hotkeys.Pressed(keyMerge.Value) && phase == Phase.Idle)
+                StartMergeOnly();
         }
 
         // ================= 会话 / 队列 =================
@@ -412,6 +419,7 @@ namespace GalleryRecorder
             Log.LogInfo($"全部 {queue.Count} 段已处理完。");
             try { adapter.OnSessionEnd(); } catch (Exception ex) { Log.LogError(ex); }
             if (cfgCompress.Value) StartCompress();
+            else if (cfgMerge.Value) StartMergeOnly();
             else { phase = Phase.Idle; status = "全部录完：" + outDir; }
         }
 
@@ -495,7 +503,8 @@ namespace GalleryRecorder
             if (pending.Length == 0 && ListRecordings(outDir).Count == 0) { phase = Phase.Idle; status = "没有可压缩的录像"; return; }
             phase = Phase.Compressing;
             string ff = ffmpegPath, args = FixCompressArgs(cfgCompressArgs.Value), dir = outDir;
-            bool del = cfgDeleteOriginal.Value, zip = cfgZip.Value;
+            bool del = cfgDeleteOriginal.Value, zip = cfgZip.Value, merge = cfgMerge.Value;
+            string mergeName = cfgMergeName.Value;
             compressStatus = "等待录像合成完成…";
             compressTask = Task.Run(() =>
             {
@@ -541,8 +550,41 @@ namespace GalleryRecorder
                     }
                     catch (Exception ex) { Log.LogError("打包失败：" + ex.Message); }
                 }
+                if (merge) msg += "；" + MergeAll(ff, dir, mergeName);
                 compressStatus = msg;
             });
+        }
+
+        private void StartMergeOnly()
+        {
+            var pending = finalizing.ToArray();
+            phase = Phase.Compressing;
+            string ff = ffmpegPath, dir = outDir, mergeName = cfgMergeName.Value;
+            compressStatus = "整合：等待录像合成完成…";
+            compressTask = Task.Run(() =>
+            {
+                try { Task.WaitAll(pending); } catch { }
+                compressStatus = MergeAll(ff, dir, mergeName);
+            });
+        }
+
+        /// <summary>原版和 Compressed\ 各拼一个整合版到 Merged\。返回状态文字。</summary>
+        private string MergeAll(string ff, string dir, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) name = "全部回想";
+            string mdir = Path.Combine(dir, "Merged");
+            Directory.CreateDirectory(mdir);
+            var raw = ListRecordings(dir);
+            var comp = ListRecordings(Path.Combine(dir, "Compressed"));
+            Log.LogInfo($"开始整合：原版 {raw.Count} 段，压缩版 {comp.Count} 段");
+            int ok = 0;
+            try
+            {
+                if (Ffmpeg.Merge(ff, raw, Path.Combine(mdir, name + ".mp4"), "", s => compressStatus = s, Log)) ok++;
+                if (Ffmpeg.Merge(ff, comp, Path.Combine(mdir, name + "_压缩.mp4"), "-tag:v hvc1", s => compressStatus = s, Log)) ok++;
+            }
+            catch (Exception ex) { Log.LogError("整合出错：" + ex); }
+            return $"整合完成 {ok} 个，目录：{mdir}";
         }
 
         /// <summary>MediaFoundation 编码器只接受 nv12；配置里没写 -pix_fmt 时自动补上。</summary>
