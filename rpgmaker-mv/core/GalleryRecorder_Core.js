@@ -20,7 +20,7 @@
 
 var GalleryRecorder = (function () {
     'use strict';
-    var VERSION = '0.2.0';
+    var VERSION = '0.2.1';
     var fs = require('fs');
     var path = require('path');
     var cp = require('child_process');
@@ -411,6 +411,8 @@ var GalleryRecorder = (function () {
         var args = splitArgs(fixMfArgs(cfg.compressArgs));
         // 浏览器录的是可变帧率；不加这个 ffmpeg 会按 30 fps 重采样，60 fps 的画面会丢一半帧
         if (cfg.compressArgs.indexOf('-fps_mode') < 0 && cfg.compressArgs.indexOf('-r ') < 0) args = ['-fps_mode', 'passthrough'].concat(args);
+        // 可变帧率时 mp4 时间刻度会按每段内容自动选（10048…19520 都出现过），整合时 concat 要求各段一致，否则时间戳倒退、ffmpeg 崩溃
+        if (cfg.compressArgs.indexOf('-video_track_timescale') < 0) args = args.concat(['-video_track_timescale', '16000']);
         // 先等所有转码结束再列文件，否则最后一段会漏掉。
         Recorder.finalizeChain.then(function () {
             var files = listRecordings(dir);
