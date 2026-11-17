@@ -20,7 +20,7 @@
 
 var GalleryRecorder = (function () {
     'use strict';
-    var VERSION = '0.1.2';
+    var VERSION = '0.1.3';
     var fs = require('fs');
     var path = require('path');
     var cp = require('child_process');
@@ -550,7 +550,16 @@ var GalleryRecorder = (function () {
         var _onError = SceneManager.onError;
         SceneManager.onError = function (e) { logGameError('onError', e); return _onError.apply(this, arguments); };
     }
-    window.addEventListener('unhandledrejection', function (ev) { logGameError('unhandledrejection', ev.reason); });
+    // 缺素材时 MV 显示“Loading Error / Retry”并停住游戏，不走上面两个钩子
+    if (Graphics.printLoadingError) {
+        var _printLoadingError = Graphics.printLoadingError;
+        Graphics.printLoadingError = function (url) {
+            var u = url; try { u = decodeURIComponent(url); } catch (x) { }
+            logGameError('缺少素材（游戏停在 Retry 画面）', { message: u });
+            return _printLoadingError.apply(this, arguments);
+        };
+    }
+    window.addEventListener('unhandledrejection',function (ev) { logGameError('unhandledrejection', ev.reason); });
 
     var _SceneManager_updateMain = SceneManager.updateMain;
     var lastMainAt = 0;
