@@ -568,14 +568,41 @@ namespace GalleryRecorder
             });
         }
 
+        /// <summary>文件名里的连续数字按数值比较，其余按字符比较。</summary>
+        private static int NaturalCompare(string x, string y)
+        {
+            string a = Path.GetFileName(x), b = Path.GetFileName(y);
+            int i = 0, j = 0;
+            while (i < a.Length && j < b.Length)
+            {
+                if (char.IsDigit(a[i]) && char.IsDigit(b[j]))
+                {
+                    int si = i, sj = j;
+                    while (i < a.Length && char.IsDigit(a[i])) i++;
+                    while (j < b.Length && char.IsDigit(b[j])) j++;
+                    string na = a.Substring(si, i - si).TrimStart('0'), nb = b.Substring(sj, j - sj).TrimStart('0');
+                    if (na.Length != nb.Length) return na.Length.CompareTo(nb.Length);
+                    int c = string.CompareOrdinal(na, nb);
+                    if (c != 0) return c;
+                }
+                else
+                {
+                    if (a[i] != b[j]) return a[i].CompareTo(b[j]);
+                    i++; j++;
+                }
+            }
+            return (a.Length - i).CompareTo(b.Length - j);
+        }
+
         /// <summary>原版和 Compressed\ 各拼一个整合版到 Merged\。返回状态文字。</summary>
         private string MergeAll(string ff, string dir, string name)
         {
             if (string.IsNullOrWhiteSpace(name)) name = "全部回想";
             string mdir = Path.Combine(dir, "Merged");
             Directory.CreateDirectory(mdir);
-            var raw = ListRecordings(dir);
-            var comp = ListRecordings(Path.Combine(dir, "Compressed"));
+            // 按数字排序（“分支2”在“分支13”前面）
+            var raw = ListRecordings(dir); raw.Sort(NaturalCompare);
+            var comp = ListRecordings(Path.Combine(dir, "Compressed")); comp.Sort(NaturalCompare);
             Log.LogInfo($"开始整合：原版 {raw.Count} 段，压缩版 {comp.Count} 段");
             int ok = 0;
             try

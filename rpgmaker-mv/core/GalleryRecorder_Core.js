@@ -503,7 +503,9 @@ var GalleryRecorder = (function () {
         var name = cfg.mergeName || '全部回想';
         Recorder.finalizeChain.then(function () {
             fs.mkdirSync(mdir, { recursive: true });
-            var raw = listRecordings(dir), comp = listRecordings(cdir);
+            // 按数字排序（“分支2”在“分支13”前面）
+            var nat = function (a, b) { return path.basename(a, '.mp4').localeCompare(path.basename(b, '.mp4'), 'zh', { numeric: true }); };
+            var raw = listRecordings(dir).sort(nat), comp = listRecordings(cdir).sort(nat);
             Log.info('开始整合：原版 ' + raw.length + ' 段，压缩版 ' + comp.length + ' 段');
             return mergeFiles(raw, path.join(mdir, name + '.mp4'))
                 .then(function () { return mergeFiles(comp, path.join(mdir, name + '_压缩.mp4'), ['-tag:v', 'hvc1']); });
