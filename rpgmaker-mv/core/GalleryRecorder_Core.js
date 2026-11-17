@@ -20,7 +20,7 @@
 
 var GalleryRecorder = (function () {
     'use strict';
-    var VERSION = '0.1.1';
+    var VERSION = '0.1.2';
     var fs = require('fs');
     var path = require('path');
     var cp = require('child_process');
@@ -533,8 +533,37 @@ var GalleryRecorder = (function () {
     }
 
     // ---------------------------------------------------------------- 挂载
+    // 游戏报错只显示在画面上；记进日志，附带当前录到哪一段。
+    function describeError(e) {
+        if (!e) return String(e);
+        return (e.stack || e.message || String(e)) + (e.filename ? ' @ ' + e.filename + ':' + e.lineno : '');
+    }
+    function logGameError(kind, e) {
+        var where = (phase !== 'Idle' && queue && queue[index]) ? '（第 ' + (index + 1) + ' 段 ' + queue[index].title + '，' + phase + '）' : '';
+        try { Log.error('游戏报错 ' + kind + where + '：' + describeError(e)); } catch (x) { }
+    }
+    if (SceneManager.catchException) {
+        var _catchException = SceneManager.catchException;
+        SceneManager.catchException = function (e) { logGameError('catchException', e); return _catchException.apply(this, arguments); };
+    }
+    if (SceneManager.onError) {
+        var _onError = SceneManager.onError;
+        SceneManager.onError = function (e) { logGameError('onError', e); return _onError.apply(this, arguments); };
+    }
+    window.addEventListener('unhandledrejection', function (ev) { logGameError('unhandledrejection', ev.reason); });
+
     var _SceneManager_updateMain = SceneManager.updateMain;
+    var lastMainAt = 0;
     SceneManager.updateMain = function () {
+        // 主循环长时间没跑（窗口最小化、锁屏、睡眠、报错停住等）时记一笔，方便事后对照
+        var pn = performance.now();
+        if (lastMainAt && pn - lastMainAt > 10000) {
+            var gap = (pn - lastMainAt) / 1000;
+            Log.warn('游戏主循环停了 ' + Math.round(gap) + ' 秒（窗口最小化 / 锁屏 / 睡眠？），当前：' + phase);
+            // 停住的时间不算进卡住 / 超时判断
+            phaseSince += gap; entryStarted += gap; lastTokenAt += gap;
+        }
+        lastMainAt = pn;
         _SceneManager_updateMain.apply(this, arguments);
         try { tick(); } catch (e) { Log.error('tick: ' + e.stack); }
     };
